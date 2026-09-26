@@ -49,14 +49,16 @@ jobs:
 
           c2w --version
 
-      - name: Build browser Linux
-        run: |
-          mkdir -p dist
-
-          c2w \
-            --to-js \
-            noi-linux-web:latest \
-            dist/
+          - name: Build browser Linux
+            run: |
+              mkdir -p dist
+          
+              c2w \
+                --to-js \
+                --build-arg SOURCE_REPO=https://github.com/container2wasm/container2wasm \
+                --build-arg SOURCE_REPO_VERSION=v0.8.4 \
+                noi-linux-web:latest \
+                dist/
 
       - name: Add website
         run: |
