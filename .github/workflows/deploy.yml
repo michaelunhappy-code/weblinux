@@ -28,43 +28,42 @@ jobs:
 
       - name: Build NOI Linux image
         run: |
+          set -euxo pipefail
           docker build -t noi-linux-web:latest .
 
       - name: Install container2wasm
         run: |
-          URL=$(curl -fsSL \
-            https://api.github.com/repos/container2wasm/container2wasm/releases/latest \
-            | jq -r '.assets[] |
-            select(.name | test("linux-amd64.tar.gz$")) |
-            .browser_download_url' |
-            head -n 1)
-
-          echo "$URL"
-
-          curl -L "$URL" -o c2w.tar.gz
+          set -euxo pipefail
+          curl -fL \
+            https://github.com/container2wasm/container2wasm/releases/download/v0.8.4/container2wasm-v0.8.4-linux-amd64.tar.gz \
+            -o c2w.tar.gz
 
           tar -xzf c2w.tar.gz
 
-          sudo install c2w /usr/local/bin/c2w
+          sudo install -m 0755 c2w /usr/local/bin/c2w
 
           c2w --version
 
-          - name: Build browser Linux
-            run: |
-              mkdir -p dist
-          
-              c2w \
-                --to-js \
-                --build-arg SOURCE_REPO=https://github.com/container2wasm/container2wasm \
-                --build-arg SOURCE_REPO_VERSION=v0.8.4 \
-                noi-linux-web:latest \
-                dist/
+      - name: Build browser Linux
+        run: |
+          set -euxo pipefail
+
+          mkdir -p dist
+
+          c2w \
+            --to-js \
+            --build-arg SOURCE_REPO=https://github.com/container2wasm/container2wasm \
+            --build-arg SOURCE_REPO_VERSION=v0.8.4 \
+            noi-linux-web:latest \
+            dist/
 
       - name: Add website
         run: |
+          set -euxo pipefail
+
           cp web/index.html dist/index.html
 
-          curl -L \
+          curl -fL \
             https://raw.githubusercontent.com/gzuidhof/coi-serviceworker/master/coi-serviceworker.min.js \
             -o dist/coi-serviceworker.min.js
 
@@ -72,7 +71,7 @@ jobs:
 
           echo "Generated files:"
           du -sh dist
-          ls -lh dist
+          ls -lah dist
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
