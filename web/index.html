@@ -4,8 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NOI Linux Web</title>
+
     <script src="./coi-serviceworker.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/@xterm/xterm@5.5.0/css/xterm.css">
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/@xterm/xterm@5.5.0/css/xterm.css"
+    >
+
     <style>
         html,
         body
@@ -16,34 +22,41 @@
             background: #111;
             overflow: hidden;
         }
+
         #terminal
         {
             width: 100%;
             height: 100%;
         }
+
         #loading
         {
             position: fixed;
             inset: 0;
             display: flex;
             flex-direction: column;
-            align-items: center;
             justify-content: center;
+            align-items: center;
             background: #111;
             color: white;
             font-family: Consolas, monospace;
-            z-index: 100;
+            z-index: 1000;
         }
+
         #title
         {
             font-size: 30px;
+            font-weight: bold;
             margin-bottom: 24px;
         }
+
         #status
         {
             font-size: 16px;
             margin-bottom: 16px;
+            text-align: center;
         }
+
         #bar
         {
             width: 420px;
@@ -53,6 +66,7 @@
             border-radius: 10px;
             overflow: hidden;
         }
+
         #progress
         {
             width: 0%;
@@ -60,22 +74,29 @@
             background: #ddd;
             transition: width 0.2s;
         }
+
         #detail
         {
             margin-top: 12px;
             font-size: 13px;
-            opacity: 0.7;
+            opacity: 0.75;
+            max-width: 80vw;
+            text-align: center;
+            word-break: break-all;
         }
     </style>
 </head>
+
 <body>
 
 <div id="loading">
     <div id="title">NOI Linux</div>
     <div id="status">正在准备启动环境...</div>
+
     <div id="bar">
         <div id="progress"></div>
     </div>
+
     <div id="detail"></div>
 </div>
 
@@ -84,13 +105,23 @@
 <script>
 var Module = window.Module = window.Module || {};
 
-const statusElement = document.getElementById("status");
-const progressElement = document.getElementById("progress");
-const detailElement = document.getElementById("detail");
+const statusElement =
+    document.getElementById("status");
+
+const detailElement =
+    document.getElementById("detail");
+
+const progressElement =
+    document.getElementById("progress");
+
+function getBaseUrl()
+{
+    return new URL("./", window.location.href);
+}
 
 Module.locateFile = function(path)
 {
-    return new URL(path, document.baseURI).href;
+    return new URL(path, getBaseUrl()).href;
 };
 
 Module.setStatus = function(text)
@@ -102,18 +133,26 @@ Module.setStatus = function(text)
         return;
     }
 
-    const match = text.match(/Downloading data.*?\((\d+)\/(\d+)\)/);
+    const match =
+        text.match(/Downloading data.*?\((\d+)\/(\d+)\)/);
 
     if (match)
     {
-        const loaded = Number(match[1]);
-        const total = Number(match[2]);
+        const loaded =
+            Number(match[1]);
 
-        const percent = total > 0 ? loaded / total * 100 : 0;
+        const total =
+            Number(match[2]);
+
+        const percent =
+            total > 0
+            ? loaded / total * 100
+            : 0;
 
         statusElement.innerText =
             "正在下载 NOI Linux 环境... " +
-            percent.toFixed(1) + "%";
+            percent.toFixed(1) +
+            "%";
 
         progressElement.style.width =
             percent + "%";
@@ -127,39 +166,148 @@ Module.setStatus = function(text)
         return;
     }
 
-    if (text === "Downloading data...")
+    if (text.includes("Downloading data"))
     {
         statusElement.innerText =
             "正在下载 NOI Linux 环境...";
+
         return;
     }
 
-    if (text === "Running...")
+    if (text.includes("Running"))
     {
         statusElement.innerText =
             "下载完成，正在启动 Linux...";
-        progressElement.style.width = "100%";
+
+        progressElement.style.width =
+            "100%";
+
         return;
     }
 
     statusElement.innerText = text;
 };
 
-window.addEventListener("error", function(e)
+async function checkFile(name)
 {
-    statusElement.innerText = "启动错误";
-    detailElement.innerText = e.message;
-    console.error(e);
-});
+    const url =
+        new URL(
+            name,
+            getBaseUrl()
+        ).href;
 
-window.addEventListener("unhandledrejection", function(e)
-{
-    statusElement.innerText = "启动错误";
-    detailElement.innerText =
-        String(e.reason || e);
+    console.log(
+        "[CHECK]",
+        name,
+        url
+    );
 
-    console.error(e.reason);
-});
+    statusElement.innerText =
+        "正在检查 " + name + "...";
+
+    try
+    {
+        const response =
+            await fetch(
+                url,
+                {
+                    method: "GET",
+                    cache: "no-store"
+                }
+            );
+
+        console.log(
+            "[CHECK RESULT]",
+            name,
+            response.status,
+            response.headers.get("content-type"),
+            response.headers.get("content-length")
+        );
+
+        if (!response.ok)
+        {
+            throw new Error(
+                name +
+                " HTTP " +
+                response.status
+            );
+        }
+
+        const length =
+            response.headers.get(
+                "content-length"
+            );
+
+        if (length)
+        {
+            detailElement.innerText =
+                name +
+                " / " +
+                (
+                    Number(length) /
+                    1024 /
+                    1024
+                ).toFixed(1) +
+                " MB";
+        }
+
+        return true;
+    }
+    catch (e)
+    {
+        console.error(
+            "[CHECK ERROR]",
+            e
+        );
+
+        statusElement.innerText =
+            "资源加载失败";
+
+        detailElement.innerText =
+            name +
+            ": " +
+            String(e);
+
+        throw e;
+    }
+}
+
+window.addEventListener(
+    "error",
+    function(e)
+    {
+        console.error(
+            "[WINDOW ERROR]",
+            e
+        );
+
+        statusElement.innerText =
+            "启动错误";
+
+        detailElement.innerText =
+            e.message || String(e.error);
+    }
+);
+
+window.addEventListener(
+    "unhandledrejection",
+    function(e)
+    {
+        console.error(
+            "[PROMISE ERROR]",
+            e.reason
+        );
+
+        statusElement.innerText =
+            "启动错误";
+
+        detailElement.innerText =
+            String(
+                e.reason ||
+                "Unknown Promise Error"
+            );
+    }
+);
 </script>
 
 <script src="./load.js"></script>
@@ -171,136 +319,209 @@ import "https://unpkg.com/xterm-pty/index.js";
 
 import "./arg-module.js";
 
-import initEmscriptenModule from "./out.js";
+import initEmscriptenModule
+    from "./out.js";
 
 const loading =
-    document.getElementById("loading");
+    document.getElementById(
+        "loading"
+    );
 
-const statusElement =
-    document.getElementById("status");
+const terminal =
+    new Terminal({
+        cursorBlink: true,
+        fontSize: 16,
+        fontFamily:
+            "Consolas, Monaco, monospace",
+        scrollback: 5000
+    });
 
-const detailElement =
-    document.getElementById("detail");
+terminal.open(
+    document.getElementById(
+        "terminal"
+    )
+);
 
 if (!window.crossOriginIsolated)
 {
     statusElement.innerText =
-        "正在初始化浏览器运行环境...";
+        "正在初始化浏览器隔离环境...";
 
     detailElement.innerText =
-        "如果页面自动刷新一次，这是正常现象";
+        "页面可能自动刷新一次，这是正常现象";
+}
+else
+{
+    detailElement.innerText =
+        "Cross-Origin Isolation 已启用";
 }
 
-const terminal = new Terminal({
-    cursorBlink: true,
-    fontSize: 16,
-    fontFamily: "Consolas, monospace",
-    scrollback: 5000
-});
+const { master, slave } =
+    openpty();
 
-terminal.open(
-    document.getElementById("terminal")
+terminal.loadAddon(
+    master
 );
 
-const { master, slave } = openpty();
-
-terminal.loadAddon(master);
-
-Module.pty = slave;
+Module.pty =
+    slave;
 
 Module["mainScriptUrlOrBlob"] =
     new URL(
         "./out.js",
-        document.baseURI
+        getBaseUrl()
     ).href;
 
 let info =
     "t:" +
-    Math.round(Date.now() / 1000) +
+    Math.round(
+        Date.now() / 1000
+    ) +
     "\n";
 
-Module["preRun"].push((mod) =>
-{
-    try
+Module["preRun"].push(
+    (mod) =>
     {
-        mod.FS.mkdir("/pack");
-    }
-    catch (e)
-    {
-    }
-
-    mod.FS.writeFile(
-        "/pack/info",
-        info
-    );
-});
-
-let readableCallbacks = [];
-
-Module.pty.onReadable(() =>
-{
-    readableCallbacks.forEach(
-        cb => cb()
-    );
-
-    readableCallbacks = [];
-});
-
-Module["preRun"].push((mod) =>
-{
-    mod["TTY"].stream_ops.poll =
-        (
-            stream,
-            timeout,
-            notifyCallback
-        ) =>
+        try
         {
-            if (Module.pty.readable)
-            {
-                return 1;
-            }
+            mod.FS.mkdir(
+                "/pack"
+            );
+        }
+        catch (e)
+        {
+        }
 
-            if (notifyCallback != null)
+        mod.FS.writeFile(
+            "/pack/info",
+            info
+        );
+    }
+);
+
+let readableCallbacks =
+    [];
+
+Module.pty.onReadable(
+    () =>
+    {
+        for (
+            const callback
+            of readableCallbacks
+        )
+        {
+            callback();
+        }
+
+        readableCallbacks =
+            [];
+    }
+);
+
+Module["preRun"].push(
+    (mod) =>
+    {
+        mod["TTY"].stream_ops.poll =
+            (
+                stream,
+                timeout,
+                notifyCallback
+            ) =>
             {
-                notifyCallback.registerCleanupFunc(
-                    () =>
+                if (
+                    Module.pty.readable
+                )
+                {
+                    return 1;
+                }
+
+                if (
+                    notifyCallback != null
+                )
+                {
+                    if (
+                        notifyCallback
+                            .registerCleanupFunc
+                    )
                     {
-                        const i =
-                            readableCallbacks.indexOf(
-                                notifyCallback
-                            );
+                        notifyCallback
+                            .registerCleanupFunc(
+                                () =>
+                                {
+                                    const i =
+                                        readableCallbacks
+                                            .indexOf(
+                                                notifyCallback
+                                            );
 
-                        if (i != -1)
-                        {
-                            readableCallbacks.splice(
-                                i,
-                                1
+                                    if (
+                                        i != -1
+                                    )
+                                    {
+                                        readableCallbacks
+                                            .splice(
+                                                i,
+                                                1
+                                            );
+                                    }
+                                }
                             );
-                        }
                     }
-                );
 
-                readableCallbacks.push(
-                    notifyCallback
-                );
-            }
+                    readableCallbacks.push(
+                        notifyCallback
+                    );
+                }
 
-            return 0;
-        };
-});
+                return 0;
+            };
+    }
+);
 
 try
 {
-    const instance =
-        await initEmscriptenModule(Module);
+    statusElement.innerText =
+        "正在检查 QEMU WASM...";
 
-    loading.style.display = "none";
+    await checkFile(
+        "qemu-system-x86_64.wasm"
+    );
+
+    statusElement.innerText =
+        "正在检查 NOI Linux 磁盘数据...";
+
+    await checkFile(
+        "qemu-system-x86_64.data"
+    );
+
+    statusElement.innerText =
+        "正在启动 Ubuntu 20.04...";
+
+    detailElement.innerText =
+        "首次启动可能需要较长时间";
+
+    const instance =
+        await initEmscriptenModule(
+            Module
+        );
+
+    console.log(
+        "[NOI Linux]",
+        "启动完成",
+        instance
+    );
+
+    loading.style.display =
+        "none";
 
     terminal.focus();
 }
 catch (e)
 {
-    console.error(e);
+    console.error(
+        "[BOOT ERROR]",
+        e
+    );
 
     statusElement.innerText =
         "NOI Linux 启动失败";
