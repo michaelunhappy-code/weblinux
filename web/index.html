@@ -114,6 +114,12 @@ const detailElement =
 const progressElement =
     document.getElementById("progress");
 
+// 需要加载的大文件列表
+const RESOURCE_FILES = [
+    "qemu-system-x86_64.wasm",
+    "qemu-system-x86_64.data"
+];
+
 function getBaseUrl()
 {
     return new URL("./", window.location.href);
@@ -203,7 +209,7 @@ async function checkFile(name)
     );
 
     statusElement.innerText =
-        "正在检查 " + name + "...";
+        "正在检查资源...";
 
     try
     {
@@ -211,8 +217,9 @@ async function checkFile(name)
             await fetch(
                 url,
                 {
-                    method: "GET",
-                    cache: "no-store"
+                    method: "HEAD",
+                    cache: "force-cache",
+                    credentials: "same-origin"
                 }
             );
 
@@ -240,15 +247,11 @@ async function checkFile(name)
 
         if (length)
         {
-            detailElement.innerText =
-                name +
-                " / " +
-                (
-                    Number(length) /
-                    1024 /
-                    1024
-                ).toFixed(1) +
-                " MB";
+            console.log(
+                "[FILE SIZE]",
+                name,
+                (Number(length) / 1024 / 1024).toFixed(1) + " MB"
+            );
         }
 
         return true;
@@ -269,6 +272,38 @@ async function checkFile(name)
             String(e);
 
         throw e;
+    }
+}
+
+// 并行检查所有必需的文件
+async function checkRequiredFiles()
+{
+    statusElement.innerText =
+        "正在检查 QEMU WASM 和磁盘数据...";
+
+    try
+    {
+        // 关键改进：使用 Promise.all() 并行执行所有检查
+        // 这样不会等待每个文件一个个完成，而是同时发起所有请求
+        const results = await Promise.all(
+            RESOURCE_FILES.map(checkFile)
+        );
+
+        console.log(
+            "[FILES CHECK COMPLETE]",
+            results
+        );
+
+        return true;
+    }
+    catch (error)
+    {
+        console.error(
+            "[FILES CHECK FAILED]",
+            error
+        );
+
+        throw error;
     }
 }
 
@@ -480,19 +515,8 @@ Module["preRun"].push(
 
 try
 {
-    statusElement.innerText =
-        "正在检查 QEMU WASM...";
-
-    await checkFile(
-        "qemu-system-x86_64.wasm"
-    );
-
-    statusElement.innerText =
-        "正在检查 NOI Linux 磁盘数据...";
-
-    await checkFile(
-        "qemu-system-x86_64.data"
-    );
+    // 并行检查所有必需文件
+    await checkRequiredFiles();
 
     statusElement.innerText =
         "正在启动 Ubuntu 20.04...";
